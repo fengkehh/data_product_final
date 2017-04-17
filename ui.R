@@ -8,7 +8,7 @@ shinyUI(fluidPage(
     # Application title
     titlePanel("2016 U.S. Air Pollution Visualizer"),
     
-    # Sidebar with a slider input for the number of bins
+    # Sidebar for pollutant & metric selection
     sidebarLayout(
         sidebarPanel(
             
