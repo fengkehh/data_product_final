@@ -2,11 +2,11 @@ library(shiny)
 library(plotly)
 library(leaflet)
 
-# Define UI for application that draws a histogram
+# Define UI for application
 shinyUI(fluidPage(
     
     # Application title
-    titlePanel("Air Pollution Visualizer"),
+    titlePanel("2016 U.S. Air Pollution Visualizer"),
     
     # Sidebar with a slider input for the number of bins
     sidebarLayout(
@@ -18,8 +18,11 @@ shinyUI(fluidPage(
             selectInput('select_metric', label = h3('Select Metric'),
                         choices = list()),
             
-            br(),br(),br(),br(),br(),
-            a(href = '', 'User Manual'),
+            br(),br(),
+            strong('Tips:'),
+            div('Select pollutant and corresponding data product metrics for visualization.'),
+            br(),br(),
+            a(href = '', 'More Info'),
             br(), br(),
             strong('Created by Keh-Harng Feng')
             
@@ -33,9 +36,9 @@ shinyUI(fluidPage(
             ),
             tabsetPanel(
                 tabPanel('Monitor Sites', 
+                         leafletOutput('site'),
                          checkboxInput('top_ten', label = 'Show Top 10', value = FALSE),
                          checkboxInput('circle', label = 'Visualize Concentration', value = TRUE),
-                         leafletOutput('site'),
                          p(),
                          strong('Tips:'),
                          div('Hover over a marker to see the rank of the site concentration compared to all other displayed markers.',
