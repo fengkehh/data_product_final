@@ -17,7 +17,7 @@ shinyUI(fluidPage(
       uiOutput('selectUI'),
       
       br(),br(),
-      a(href = '', 'More Info'),
+      a(href = 'https://fengkehh.github.io/data_product_final/', 'More Info'),
       br(), br(),
       strong('Created by Keh-Harng Feng')
       

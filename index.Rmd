@@ -1,0 +1,326 @@
+---
+title: "2016 US Air Pollution Visualizer"
+author: "Keh-Harng Feng"
+date: "April 18, 2017"
+output: 
+    bookdown::html_document2:
+        toc: true
+        toc_float: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE)
+```
+
+# Introduction
+The U.S. Environmental Protection Agency has collected extensive air quality data throughout the United States for years. The author has written an application hosted at [https://fengkehh.shinyapps.io/AirPollutionVisualizer/] for the end users to visualize all criteria pollutants measured in the United States in 2016 using a simple GUI. This document contains the background details for the data and the application. This is provided purely for reproducibility and completeness. **It is not the user manual or the pitch presentation.** The pitch presentation can be accessed [here]().
+
+# Data Description
+## Monitor Data
+An annual summary dataset containing air quality measurements from monitoring sites in 2016 is obtained from the [U.S. Environmental Protection Agency](http://aqsdr1.epa.gov/aqsweb/aqstmp/airdata/download_files.html#Meta). The full descriptions for the included variables can be found [here](http://aqsdr1.epa.gov/aqsweb/aqstmp/airdata/FileFormats.html#_annual_summary_files).
+
+The variables of concern for the program are
+
+1. `State.Code`: numerical state code.
+2. `Parameter.Code`: indicates the parameter measured for a particular row of measurements.
+3. `Arithmetic.Mean`: annual mean value for the measured parameter.
+4. `Units.of.Measure`: units for the recorded measurement.
+
+## Geolocation Data
+The annual summary dataset only contains geolocation codes such as numerical state code and county code. It is necessary to translate the codes to more human-readable state codes in order for plotly to match their locations. Matching is done using EPA's [states and counties data](https://aqs.epa.gov/aqsweb/documents/codetables/states_and_counties.html). The variables of interest here are
+
+1. `State.Code`: numerical state code.
+2. `State.Abbreviation`: two-letter state code.
+3. `State.Name`: full state name.
+
+# Methodology
+Pollutants with the corresponding parameter codes `42101`, `12128`, `42602`, `44201`, `88101`, `42401` are extracted. These correspond to the [criteria pollutants](https://www.epa.gov/criteria-air-pollutants#self) regulated by EPA.
+
+The dataset includes potential measurements from Mexico and Canada. They are excluded as only measurements within the U.S. are of interest for this project. The annual arithmetic.mean for each criteria pollutant is computed using a multitude of aggregation metrics by the EPA. Thus the user is prompted to select a specific combination of interest and the data is subsetted accordingly.
+
+The application also allows the user to display state-wise aggregated mean values for the entire nation. State code matching is carried out by column-wise merging of the geolocation and subsetted air quality data frames.
+
+# Visualization
+Site monitors are visualized on a street map using [Leaflet](https://rstudio.github.io/leaflet/). Visualization of concentration level is done purely aesthetically and is only meant to provide a relative comparison between different monitors.
+
+State-aggregated mean values are visualized as choropleth maps using [Plot.ly](https://plot.ly/r/). The code is adapted from the official [snippiet example](https://plot.ly/r/choropleth-maps/).
+
+Application UI and server backend are written using [Shiny](https://shiny.rstudio.com/) with a sprinkle of [ShinyBS](https://ebailey78.github.io/shinyBS/) for tooltips and popovers. The code for the program can be found in the [Appendix](#APP)
+
+# Appendix
+## Data Ingress & Processing Code {#DPC}
+```{r data-appendix, eval = FALSE, echo = TRUE}
+# Data processing code
+# Data ingress
+if (!file.exists('./data/annual_all_2016.zip')) {
+    download.file(url = 'http://aqsdr1.epa.gov/aqsweb/aqstmp/airdata/annual_all_2016.zip', destfile = './data/annual_all_2016.zip')
+}
+
+if (!file.exists('./data/annual_all_2016.csv')) {
+    unzip('./data/annual_all_2016.zip')
+}
+
+if (!file.exists('./data/states_and_counties.csv')) {
+    download.file(url = 'https://aqs.epa.gov/aqsweb/documents/codetables/states_and_counties.csv', destfile = './data/states_and_counties.csv')    
+}
+
+data_2016 <- read.csv('./data/annual_all_2016.csv')
+
+data_states <- read.csv('./data/states_and_counties.csv')
+
+# Conversion
+data_2016$Parameter.Code <- factor(data_2016$Parameter.Code)
+
+# Extract Criteria Pollutants
+Selected.Code <- c(42101, 12128, 42602, 44201, 88101, 42401)
+ind <- match(Selected.Code, data_2016$Parameter.Code)
+Parameter.Name <- data_2016$Parameter.Name[ind]
+
+# List for pollutant selection box in shiny
+criteriaList <- setNames(as.list(Selected.Code), Parameter.Name)
+
+# Extract criteria measurement data
+ind <- (data_2016$Parameter.Code %in% Selected.Code) & !(data_2016$State.Code %in% c(80, 'CC'))
+
+data_criteria <- data_2016[ind, ]
+
+# Geolocation Matching
+# Aggregate to get rid of county data and reduce dimension
+data_states <- with(data_states, aggregate(list(State.Code = State.Code), 
+                                           by = list(State.Name = State.Name, 
+                                                     State.Abb = State.Abbreviation), 
+                                           FUN = function(x) x[1]))
+
+# indices for the reference state code without Mexico and Canada (already excluded in criteria data)
+ref_ind <- !(data_states$State.Code %in% c(80, 'CC'))
+
+data_states <- data_states[ref_ind, ]
+
+data_states$State.Code <- factor(as.numeric(as.character(data_states$State.Code)))
+```
+
+## Shiny Application Code {#APP}
+ui.R:
+```{r ui, eval = FALSE, echo = TRUE}
+library(shiny)
+library(shinyBS)
+library(plotly)
+library(leaflet)
+
+# Define UI for application
+shinyUI(fluidPage(
+  
+  # Application title
+  titlePanel("2016 U.S. Air Pollution Visualizer"),
+  
+  # Sidebar for pollutant & metric selection
+  sidebarLayout(
+    sidebarPanel(
+      selectInput('select_pollutant', 'Select Pollutant', choices = list()),
+      
+      uiOutput('selectUI'),
+      
+      br(),br(),
+      a(href = '', 'More Info'),
+      br(), br(),
+      strong('Created by Keh-Harng Feng')
+      
+    ),
+    
+    
+    mainPanel(
+      tags$style(type="text/css",
+                 ".shiny-output-error { visibility: hidden; }",
+                 ".shiny-output-error:before { visibility: hidden; }"
+      ),
+      tabsetPanel(
+        tabPanel('Monitor Sites', 
+                 leafletOutput('site'),
+                 checkboxInput('top_ten', label = 'Show Top 10', value = FALSE),
+                 bsTooltip('top_ten', 
+                           'Show only the top 10 sites with highest measured concentrations',
+                           placement = 'bottom',
+                           options = list(container = 'body')),
+                 checkboxInput('circle', label = 'Visualize Concentration', value = TRUE),
+                 bsTooltip('circle', 
+                           'Toggle visual display of concentration level',
+                           placement = 'bottom',
+                           options = list(container = 'body')),
+                 actionLink('site_tips', label = 'Tips'),
+                 bsPopover('site_tips', 
+                           'Hover over individual markers to display ranks compared to other markers.<br>Click on markers to zoom (cluster) or display mean (individual)',
+                           trigger = 'click',
+                           placement = 'top')
+                     
+        ),
+        
+        tabPanel('State Average', plotlyOutput('state'),
+                 actionLink('state_tips', label = 'Tips'),
+                 bsPopover('state_tips', 
+                           'Hover over each state to display detailed info about each state.<br>No label means no data available.',
+                           trigger = 'click',
+                           placement = 'top')
+        )
+        
+      )
+    )
+  )
+))
+```
+
+server.R:
+```{r server, echo = TRUE, eval = FALSE}
+library(shiny)
+library(shinyBS)
+library(plotly)
+library(leaflet)
+source('helpers.R')
+
+# Define server logic
+shinyServer(function(input, output, session) {
+  
+  updateSelectInput(session, 'select_pollutant', choices = criteriaList)
+  
+  output$selectUI <- renderUI({
+    if(!is.null(input$select_pollutant)) {
+
+      tipify(selectInput('select_metric', label = 'Select Metric', choices = metric_list()),
+             'Select aggregation metric used by EPA', 
+             placement = 'right', 
+             options = list(container = 'body'))
+    }
+  })
+  
+  #########################
+  # Reactive Functions
+  #########################
+  
+  # Extract selected pollutant data.
+  data_pollutant <- reactive({
+    data <- data_criteria[data_criteria$Parameter.Code == input$select_pollutant, ]
+  })
+  
+  # Extract selected pollutant with selected metric
+  data_pollutant_metric <- reactive({
+    data <- data_criteria[(data_criteria$Parameter.Code == input$select_pollutant) &
+                            data_criteria$Metric.Used == input$select_metric, ] 
+  })
+  # Build metric list for metric selection.
+  metric_list <- reactive({
+    data <- data_pollutant()
+    names <- unique(data$Metric.Used)
+    return(setNames(as.list(names), names))
+  })
+  
+  
+  # Compute state aggregated means.
+  state_aggregate <- reactive({
+    data <- data_pollutant_metric()
+    
+    
+    # Compute aggregated means
+    data_aggregate <- aggregate(list(Arithmetic.Mean = data$Arithmetic.Mean),
+                                by = list(State.Code = data$State.Code,
+                                          Metric.Used = data$Metric.Used,
+                                          Units.of.Measure = data$Units.of.Measure), 
+                                FUN = mean)
+    
+    
+    data_aggregate$Rank <- rank(1 - data_aggregate$Arithmetic.Mean)
+    data_aggregate <- merge(data_aggregate, data_states, 
+                            by = c('State.Code'), 
+                            all = TRUE)
+    data_aggregate$hover <- with(data_aggregate, paste(State.Name, '<br>', 'Rank:', Rank))
+    
+    
+    return(data_aggregate)
+  })
+  
+  #########################
+  # End of Reactive Functions
+  #########################
+  
+  
+  # Leaflet map to show monitor sites.
+  output$site <- renderLeaflet({
+    # Check required input first
+    validate(
+      need(input$select_pollutant, 'Please select pollutant.'),
+      need(input$select_metric, 'Please select metric')
+    )
+    
+    data <- data_pollutant_metric()
+    
+    data <- data[order(data$Arithmetic.Mean, decreasing = TRUE),]
+    
+    if (input$top_ten) {
+      data <- data[1:10,]
+    }
+    
+    data %>% 
+      leaflet() %>%
+      addTiles() %>% 
+      addMarkers(clusterOptions = TRUE, lng = ~Longitude, lat = ~Latitude, 
+                 label = paste('Rank', 1:nrow(data)),
+                 popup = paste('Mean:', 
+                               as.character(round(data$Arithmetic.Mean, 3)), 
+                               data$Units.of.Measure))
+  })
+  
+  # Update leaflet map (to avoid resetting zoom levels)
+  observe({
+    data <- data_pollutant_metric()
+    
+    if (input$top_ten) {
+      data <- data[order(data$Arithmetic.Mean, decreasing = TRUE),][1:10,]
+    }
+    
+    # Compute circle radius 10000*(normalized arithmetic mean Z score + 2)
+    radii <- 1e4*((data$Arithmetic.Mean - mean(data$Arithmetic.Mean))/sd(data$Arithmetic.Mean) + 2)
+    proxy <- leafletProxy('site', data = data)
+    
+    if (input$circle) {
+      proxy %>%
+        addCircles(lng = ~Longitude, lat = ~Latitude,
+                   radius = radii, weight = 0, color = 'red')
+    } else {
+      proxy %>% 
+        clearShapes()
+    }
+    
+    
+  })
+  
+  # Plotly Choropleth Map for State Aggregate
+  output$state <- renderPlotly({
+    # Check required input first
+    validate(
+      need(input$select_pollutant, 'Please select pollutant.'),
+      need(input$select_metric, 'Please select metric')
+    )
+    
+    # specify some map projection/options
+    g <- list(
+      scope = 'usa',
+      projection = list(type = 'albers usa'),
+      showlakes = TRUE,
+      lakecolor = toRGB('white')
+    )
+    data <- state_aggregate()
+    p <- plot_geo(data, 
+                  locationmode = 'USA-states') %>%
+      add_trace(
+        z = ~Arithmetic.Mean, text = ~hover, locations = ~State.Abb,
+        color = ~Arithmetic.Mean, colors = 'Reds'
+      ) %>%
+      colorbar(title = data$Units.of.Measure[1]) %>%
+      layout(
+        title = 'Average Concentration by State',
+        geo = g
+      )
+    p
+    
+    
+  })
+})
+```
