@@ -77,7 +77,7 @@ For example, if the user selects `Carbon monoxide` as the pollutant of interest,
 unique(data$Metric.Used)
 ```
 
-This reactive philosophy allows the program to be extended to work on other EPA data products with minimal effort.
+Using reactive UI allows the program to be extended to work on other EPA data products with minimal effort.
 
 Visualization
 ========================================================
