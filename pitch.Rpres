@@ -1,28 +1,117 @@
-pitch
+Air Pollution Visualizer
 ========================================================
-author: 
-date: 
+author: Keh-Harng Feng
+date: 4/18/2017
 autosize: true
 
-First Slide
+Introduction
 ========================================================
 
-For more details on authoring R presentations please visit <https://support.rstudio.com/hc/en-us/articles/200486468>.
+The United State [Environmental Protection Agency](https://www.epa.gov/) has collected air quality data using an extensive network of monitor sites. The [Air Pollution Visualizer](https://fengkehh.shinyapps.io/AirPollutionVisualizer/) is written to facillitate simple access to the 2016 annual summary data, featuring:
 
-- Bullet 1
-- Bullet 2
-- Bullet 3
+- Simple, easy to use GUI to subset data based on pollutant and aggregation metrics.
+- Interactive visualization of all monitor sites.
+- Visualization of state aggregated means.
+- Ranking information.
+- Completely online and free. No installation, no fee and no virus.
 
-Slide With Code
+Reactive UI
 ========================================================
+```{r data, echo = FALSE}
+# Data processing code
+# Data ingress
+if (!file.exists('./data/annual_all_2016.zip')) {
+    download.file(url = 'http://aqsdr1.epa.gov/aqsweb/aqstmp/airdata/annual_all_2016.zip', destfile = './data/annual_all_2016.zip')
+}
 
-```{r}
-summary(cars)
+if (!file.exists('./data/annual_all_2016.csv')) {
+    unzip('./data/annual_all_2016.zip')
+}
+
+if (!file.exists('./data/states_and_counties.csv')) {
+    download.file(url = 'https://aqs.epa.gov/aqsweb/documents/codetables/states_and_counties.csv', destfile = './data/states_and_counties.csv')    
+}
+
+data_2016 <- read.csv('./data/annual_all_2016.csv')
+
+data_states <- read.csv('./data/states_and_counties.csv')
+
+# Conversion
+data_2016$Parameter.Code <- factor(data_2016$Parameter.Code)
+
+# Extract Criteria Pollutants
+Selected.Code <- c(42101, 12128, 42602, 44201, 88101, 42401)
+ind <- match(Selected.Code, data_2016$Parameter.Code)
+Parameter.Name <- data_2016$Parameter.Name[ind]
+
+# List for pollutant selection box in shiny
+criteriaList <- setNames(as.list(Selected.Code), Parameter.Name)
+
+# Extract criteria measurement data
+ind <- (data_2016$Parameter.Code %in% Selected.Code) & !(data_2016$State.Code %in% c(80, 'CC'))
+
+data_criteria <- data_2016[ind, ]
+
+# Geolocation Matching
+# Aggregate to get rid of county data and reduce dimension
+data_states <- with(data_states, aggregate(list(State.Code = State.Code), 
+                                           by = list(State.Name = State.Name, 
+                                                     State.Abb = State.Abbreviation), 
+                                           FUN = function(x) x[1]))
+
+# indices for the reference state code without Mexico and Canada (already excluded in criteria data)
+ref_ind <- !(data_states$State.Code %in% c(80, 'CC'))
+
+data_states <- data_states[ref_ind, ]
+
+data_states$State.Code <- factor(as.numeric(as.character(data_states$State.Code)))
+
+data <- data_criteria[data_criteria$Parameter.Code == 42101, ]
 ```
 
-Slide With Plot
+While the visualizer is hardcoded to display only [criteria pollutants](https://www.epa.gov/criteria-air-pollutants#self), all other menu selection elements use reactive UI for an extensible program that can work on other EPA data products with minimal effort. 
+
+For example, if the user selects `Carbon monoxide` as the pollutant of interest, the corresponding metrics for `Carbon monoxide` are procedurally generated in the drop-down menu for the user:
+
+```{r reactive-ui}
+unique(data$Metric.Used)
+```
+
+Visualization
+========================================================
+<style>
+.column-left{
+  float: left;
+  width: 45%;
+  text-align: left;
+}
+.column-right{
+  float: right;
+  width: 45%;
+  text-align: left;
+}
+</style>
+
+<div class = "column-left">
+Monitor sites for all criteria pollutants can be visualized geographically. Relative concentration levels can be visually toggeled on and off. 
+
+<center><img src ="./site_demo.png"></center>
+</div>
+
+<div class = "column-right">
+State aggregated mean is displayed on the `State Average` tab. 
+
+<center><img src = "./state_demo.png"></center>
+
+Technical documentation can be accessed <a href = https://fengkehh.github.io/data_product_final/>here</a> .
+</div>
+
+Future Work
 ========================================================
 
-```{r, echo=FALSE}
-plot(cars)
-```
+- Allow user to specify specific year for visualization (drop-down selection or csv upload).
+- Integrate time-series data.
+- Allow users to specify monitor pairs for comparison by capturing mouse event.
+- Automatic pair-wise T-test for brush selection on time-series data.
+
+Author: Keh-Harng Feng
