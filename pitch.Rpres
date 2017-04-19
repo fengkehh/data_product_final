@@ -69,15 +69,13 @@ data_states$State.Code <- factor(as.numeric(as.character(data_states$State.Code)
 data <- data_criteria[data_criteria$Parameter.Code == 42101, ]
 ```
 
-While the visualizer is hardcoded to display only [criteria pollutants](https://www.epa.gov/criteria-air-pollutants#self), all other menu selection elements are generated **on the fly** using information contained in the data set. 
+While the visualizer is hardcoded to display only [criteria pollutants](https://www.epa.gov/criteria-air-pollutants#self), all other menu selection elements use reactive UI for an extensible program that can work on other EPA data products with minimal effort. 
 
 For example, if the user selects `Carbon monoxide` as the pollutant of interest, the corresponding metrics for `Carbon monoxide` are procedurally generated in the drop-down menu for the user:
 
 ```{r reactive-ui}
 unique(data$Metric.Used)
 ```
-
-Using reactive UI allows the program to be extended to work on other EPA data products with minimal effort.
 
 Visualization
 ========================================================
