@@ -13,7 +13,7 @@ knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE)
 ```
 
 # Introduction
-The U.S. Environmental Protection Agency has collected extensive air quality data throughout the United States for years. An online application is written for the end users to visualize all criteria pollutants measured in the United States in 2016 using a simple GUI. This document contains the background details for the data and the application. This is provided purely for reproducibility and completeness. **It is not the user manual or the pitch presentation.** The pitch presentation can be accessed [here](https://rpubs.com/fengkehh/268999).
+The U.S. Environmental Protection Agency has collected extensive air quality data throughout the United States for years. An online application is written for the end users to visualize all criteria pollutants measured in the United States in 2016 using a simple GUI. This document contains the background details for the data and the application. This is provided purely for reproducibility and completeness. **It is not the the pitch presentation.** The pitch presentation can be accessed [here](https://rpubs.com/fengkehh/268999).
 
 # Data Description
 ## Monitor Data
